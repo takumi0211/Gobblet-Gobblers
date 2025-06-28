@@ -281,7 +281,19 @@ class GobbletGobblersGame {
 
     updateCurrentPlayer() {
         const playerIndicator = document.getElementById('current-player');
-        playerIndicator.textContent = `PLAYER ${this.gameState.current_player}`;
+        
+        let displayText = `PLAYER ${this.gameState.current_player}`;
+        
+        // AI対戦の場合は YOU / AI で表示
+        if (this.currentMode === 'ai') {
+            if (this.gameState.current_player === this.humanColor) {
+                displayText = 'YOU';
+            } else {
+                displayText = 'AI';
+            }
+        }
+        
+        playerIndicator.textContent = displayText;
         playerIndicator.className = `player-indicator-game player-${this.gameState.current_player.toLowerCase()}`;
     }
 

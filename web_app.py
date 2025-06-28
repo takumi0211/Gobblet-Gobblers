@@ -1,12 +1,37 @@
 from flask import Flask, render_template, request, jsonify, session
 import json
 # --- 共通ロジックをtrain_gobbletからインポートしてAIと整合 ---
-from train_gobblet import GobbletGobblersGame, Piece, DQN, ActionMapper  # type: ignore
+from train_gobblet import FastGobbletGame as GobbletGobblersGame, Piece, DQN, ActionMapper  # type: ignore
 import torch
+import torch.nn as nn
 import numpy as np
 
 app = Flask(__name__)
 app.secret_key = 'gobblet_gobblers_secret_key'
+
+# 古いモデルとの互換性のためのレガシーDQNクラス
+class LegacyDQN(nn.Module):
+    """古いモデルファイルとの互換性のためのDQNクラス"""
+    
+    def __init__(self, n_observations: int, n_actions: int):
+        super(LegacyDQN, self).__init__()
+        
+        # 保存されたモデルの実際の構造に合わせる
+        # backbone.0: Linear(120, 128)
+        # backbone.1: ReLU
+        # backbone.2: Linear(128, 128)  
+        # backbone.3: ReLU
+        self.backbone = nn.Sequential(
+            nn.Linear(n_observations, 128),  # backbone.0
+            nn.ReLU(),                       # backbone.1
+            nn.Linear(128, 128),             # backbone.2
+            nn.ReLU()                        # backbone.3
+        )
+        self.value_head = nn.Linear(128, n_actions)
+    
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        features = self.backbone(x)
+        return self.value_head(features)
 
 # === AI関連ユーティリティ ===
 ai_agents_cache = {}
@@ -16,16 +41,81 @@ def get_ai_agent(player_symbol: str):
     """プレイヤーシンボル('O' or 'B')に応じたAIエージェントを取得(キャッシュあり)"""
     if player_symbol not in ai_agents_cache:
         model_path = f"dqn_gobblet_agent_{player_symbol}.pth"
-        agent = DQN(n_observations=120, n_actions=len(action_mapper_global))
-        # CPUでロード
-        agent.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
+        
+        try:
+            # 最初に新しい構造で試す
+            agent = DQN(n_observations=96, n_actions=len(action_mapper_global))
+            agent.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
+            print(f"新しい構造でモデルをロード: {player_symbol}")
+        except RuntimeError as e:
+            # 新しい構造で失敗した場合、古い構造で試す
+            print(f"新しい構造でのロードに失敗、古い構造で試行: {player_symbol}")
+            try:
+                agent = LegacyDQN(n_observations=120, n_actions=len(action_mapper_global))
+                agent.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
+                print(f"古い構造でモデルをロード成功: {player_symbol}")
+            except RuntimeError as e2:
+                print(f"モデルロードに失敗: {e2}")
+                # ランダムAIとして動作
+                agent = LegacyDQN(n_observations=120, n_actions=len(action_mapper_global))
+                print(f"ランダムAIとして初期化: {player_symbol}")
+        
         agent.eval()
         ai_agents_cache[player_symbol] = agent
     return ai_agents_cache[player_symbol]
 
 def get_state_for_ai(game):
-    """120次元の状態ベクトルを取得 (train_gobbletと同一仕様)"""
-    return game._get_state()
+    """状態ベクトルを取得 (モデルに応じて96次元または120次元)"""
+    ai_player = session.get('ai_player')
+    agent = ai_agents_cache.get(ai_player)
+    
+    if agent and isinstance(agent, LegacyDQN):
+        # 古いモデルの場合は120次元の状態を生成
+        return get_legacy_state(game)
+    else:
+        # 新しいモデルの場合は96次元
+        return game._get_state_fast()
+
+def get_legacy_state(game):
+    """120次元の古い状態表現を生成"""
+    state = np.zeros(120, dtype=np.float32)
+    
+    # ボード状態（3*3*6 = 54次元）
+    for r in range(3):
+        for c in range(3):
+            base_idx = (r * 3 + c) * 6
+            if game.board_state[r, c, 0] > 0:
+                player = game.board_state[r, c, 0]
+                size = game.board_state[r, c, 1]
+                piece_type = (player - 1) * 3 + (size - 1)
+                state[base_idx + piece_type] = 1.0
+    
+    # 手持ちコマ（2*3*2 = 12次元）- 各プレイヤー、各サイズ2個まで
+    base_idx = 54
+    for size in range(1, 4):
+        count_o = min(2, np.sum(game.hand_pieces_o == size))
+        count_b = min(2, np.sum(game.hand_pieces_b == size))
+        
+        # Oプレイヤーの手持ち
+        for i in range(2):
+            if i < count_o:
+                state[base_idx + (size-1)*2 + i] = 1.0
+        
+        # Bプレイヤーの手持ち
+        for i in range(2):
+            if i < count_b:
+                state[base_idx + 6 + (size-1)*2 + i] = 1.0
+    
+    # 現在プレイヤー（2次元）
+    base_idx = 66
+    if game._current_player_int == 1:  # O
+        state[base_idx] = 1.0
+    else:  # B
+        state[base_idx + 1] = 1.0
+    
+    # 残りの次元は0のまま（合計120次元）
+    
+    return state
 
 def get_valid_moves_for_ai(game):
     """現在プレイヤーの合法手を列挙 (train_gobbletと同一仕様)"""
@@ -55,37 +145,32 @@ def ai_make_move(game):
         move = action_mapper_global.get_move(action_idx)
 
     # --- 手を適用 ---
-    if move[0] == 'P':
-        _, size, r, c = move
-        piece_to_place = next(p for p in game.off_board_pieces[ai_player] if p.size == size)
-        game.off_board_pieces[ai_player].remove(piece_to_place)
-        game.board[r][c].append(piece_to_place)
-    elif move[0] == 'M':
-        _, r_from, c_from, r_to, c_to = move
-        moving_piece = game.board[r_from][c_from].pop()
-        game.board[r_to][c_to].append(moving_piece)
-    # 勝利判定
-    game.check_win()
-    if not game.winner:
-        game.switch_player()
+    next_state, reward, done = game.step(move)
     return True
 
 def game_state_to_dict(game):
-    """ゲーム状態を辞書形式に変換"""
+    """FastGobbletGame状態を辞書形式に変換"""
+    # board_stateからboard形式に変換
     board_state = []
-    for row in game.board:
+    for row in range(3):
         board_row = []
-        for cell in row:
-            if cell:
-                pieces = [{'color': p.color, 'size': p.size} for p in cell]
-                board_row.append(pieces)
-            else:
-                board_row.append([])
+        for col in range(3):
+            cell_pieces = []
+            if game.board_state[row, col, 0] > 0:  # コマがある場合
+                color = 'O' if game.board_state[row, col, 0] == 1 else 'B'
+                size = int(game.board_state[row, col, 1])
+                cell_pieces.append({'color': color, 'size': size})
+            board_row.append(cell_pieces)
         board_state.append(board_row)
     
-    off_board_pieces = {}
-    for player, pieces in game.off_board_pieces.items():
-        off_board_pieces[player] = [{'color': p.color, 'size': p.size} for p in pieces]
+    # hand_piecesからoff_board_pieces形式に変換
+    off_board_pieces = {'O': [], 'B': []}
+    for size in game.hand_pieces_o:
+        if size > 0:
+            off_board_pieces['O'].append({'color': 'O', 'size': int(size)})
+    for size in game.hand_pieces_b:
+        if size > 0:
+            off_board_pieces['B'].append({'color': 'B', 'size': int(size)})
     
     return {
         'board': board_state,
@@ -95,44 +180,38 @@ def game_state_to_dict(game):
     }
 
 def dict_to_game_state(game_dict):
-    """辞書形式からゲーム状態を復元"""
+    """辞書形式からFastGobbletGame状態を復元"""
     game = GobbletGobblersGame()
     
-    # 盤面を復元
+    # board_stateを復元
+    game.board_state.fill(0)
     for row_idx, row in enumerate(game_dict['board']):
         for col_idx, cell in enumerate(row):
-            for piece_data in cell:
-                piece = Piece(piece_data['color'], piece_data['size'])
-                game.board[row_idx][col_idx].append(piece)
+            if cell:  # セルにコマがある場合
+                piece_data = cell[-1]  # 一番上のコマ（FastGobbletGameは1つのコマのみ）
+                color_int = 1 if piece_data['color'] == 'O' else 2
+                game.board_state[row_idx, col_idx, 0] = color_int
+                game.board_state[row_idx, col_idx, 1] = piece_data['size']
     
-    # 手持ちのコマを復元
-    for player, pieces in game_dict['off_board_pieces'].items():
-        game.off_board_pieces[player] = []
-        for piece_data in pieces:
-            piece = Piece(piece_data['color'], piece_data['size'])
-            game.off_board_pieces[player].append(piece)
+    # hand_piecesを復元
+    game.hand_pieces_o.fill(0)
+    game.hand_pieces_b.fill(0)
+    
+    o_pieces = game_dict['off_board_pieces'].get('O', [])
+    b_pieces = game_dict['off_board_pieces'].get('B', [])
+    
+    for i, piece_data in enumerate(o_pieces):
+        if i < 6:  # 最大6個まで
+            game.hand_pieces_o[i] = piece_data['size']
+    
+    for i, piece_data in enumerate(b_pieces):
+        if i < 6:  # 最大6個まで
+            game.hand_pieces_b[i] = piece_data['size']
     
     game.current_player = game_dict['current_player']
+    game._current_player_int = 1 if game.current_player == 'O' else 2
     game.winner = game_dict['winner']
-    
-    # all_piecesを最新のオブジェクトに更新（盤面上と手持ちのすべてのコマ）
-    game.all_pieces = []
-    # O → B の順でサイズ小→大、同サイズで2個ずつの順に並べる
-    for color in ['O', 'B']:
-        for size in [1, 1, 2, 2, 3, 3]:
-            # まず手持ちから検索
-            target_piece = next((p for p in game.off_board_pieces[color] if p.size == size and p not in game.all_pieces), None)
-            if target_piece is None:
-                # 盤面から検索
-                for r in range(3):
-                    for c in range(3):
-                        target_piece = next((p for p in game.board[r][c] if p.color == color and p.size == size and p not in game.all_pieces), None)
-                        if target_piece:
-                            break
-                    if target_piece:
-                        break
-            if target_piece:
-                game.all_pieces.append(target_piece)
+    game._cache_valid = False  # キャッシュを無効化
     
     return game
 
@@ -183,42 +262,35 @@ def place_piece():
     # デバッグ情報
     print(f"配置試行: サイズ{size}のコマを({row},{col})に配置")
     print(f"現在のプレイヤー: {game.current_player}")
-    print(f"手持ちのコマ: {[f'{p.color}{p.size}' for p in game.off_board_pieces[game.current_player]]}")
     
-    if game.is_valid_place(size, row, col):
-        # 手持ちからコマを削除
-        available_pieces = [p for p in game.off_board_pieces[game.current_player] if p.size == size]
-        if available_pieces:
-            piece_to_place = available_pieces[0]
-            game.off_board_pieces[game.current_player].remove(piece_to_place)
-            # 盤に配置
-            game.board[row][col].append(piece_to_place)
-            
-            print(f"配置成功: {piece_to_place.color}{piece_to_place.size}を({row},{col})に配置")
-            
-            # 勝利判定
+    # 有効な配置かチェック（get_valid_moves()を使用）
+    valid_moves = game.get_valid_moves()
+    target_move = ('P', size, row, col)
+    
+    if target_move in valid_moves:
+        print(f"配置成功: {game.current_player}{size}を({row},{col})に配置")
+        
+        # FastGobbletGameのstep()メソッドを使用
+        next_state, reward, done = game.step(target_move)
+        
+        # 勝利判定
+        if game.winner:
             win_result = check_win_with_line(game)
-            if win_result:
-                game.winner = win_result['winner']
-                session['game_state'] = game_state_to_dict(game)
-                return jsonify({
-                    'status': 'success',
-                    'message': f'プレイヤー {game.winner} の勝利！',
-                    'winner': game.winner,
-                    'winning_line': win_result['line']
-                })
-            
-            game.switch_player()
-            
-            # --- AIが次のプレイヤーかどうかをチェック ---
-            ai_turn = False
-            if session.get('vs_ai') and game.current_player == session.get('ai_player'):
-                ai_turn = True
-            
             session['game_state'] = game_state_to_dict(game)
-            return jsonify({'status': 'success', 'message': 'コマを配置しました', 'ai_turn': ai_turn})
-        else:
-            return jsonify({'status': 'error', 'message': '指定されたサイズのコマが見つかりません'})
+            return jsonify({
+                'status': 'success',
+                'message': f'プレイヤー {game.winner} の勝利！',
+                'winner': game.winner,
+                'winning_line': win_result['line'] if win_result else None
+            })
+        
+        # --- AIが次のプレイヤーかどうかをチェック ---
+        ai_turn = False
+        if session.get('vs_ai') and game.current_player == session.get('ai_player'):
+            ai_turn = True
+        
+        session['game_state'] = game_state_to_dict(game)
+        return jsonify({'status': 'success', 'message': 'コマを配置しました', 'ai_turn': ai_turn})
     else:
         return jsonify({'status': 'error', 'message': '無効な配置です'})
 
@@ -241,27 +313,26 @@ def move_piece():
     print(f"移動試行: ({from_row},{from_col})から({to_row},{to_col})に移動")
     print(f"現在のプレイヤー: {game.current_player}")
     
-    if game.is_valid_move(from_row, from_col, to_row, to_col):
-        # 移動元のコマを取得して盤から削除
-        moving_piece = game.board[from_row][from_col].pop()
-        # 移動先に配置
-        game.board[to_row][to_col].append(moving_piece)
+    # 有効な移動かチェック（get_valid_moves()を使用）
+    valid_moves = game.get_valid_moves()
+    target_move = ('M', from_row, from_col, to_row, to_col)
+    
+    if target_move in valid_moves:
+        print(f"移動成功: {game.current_player}のコマを({from_row},{from_col})から({to_row},{to_col})に移動")
         
-        print(f"移動成功: {moving_piece.color}{moving_piece.size}を({from_row},{from_col})から({to_row},{to_col})に移動")
+        # FastGobbletGameのstep()メソッドを使用
+        next_state, reward, done = game.step(target_move)
         
         # 勝利判定
-        win_result = check_win_with_line(game)
-        if win_result:
-            game.winner = win_result['winner']
+        if game.winner:
+            win_result = check_win_with_line(game)
             session['game_state'] = game_state_to_dict(game)
             return jsonify({
                 'status': 'success',
                 'message': f'プレイヤー {game.winner} の勝利！',
                 'winner': game.winner,
-                'winning_line': win_result['line']
+                'winning_line': win_result['line'] if win_result else None
             })
-        
-        game.switch_player()
         
         # --- AIが次のプレイヤーかどうかをチェック ---
         ai_turn = False
@@ -355,11 +426,18 @@ def check_win_with_line(game):
     ]
     
     for line_coords in lines_coordinates:
-        pieces = [game.get_top_piece(r, c) for r, c in line_coords]
+        colors = []
+        for r, c in line_coords:
+            if game.board_state[r, c, 0] > 0:  # コマがある場合
+                colors.append(game.board_state[r, c, 0])
+            else:
+                colors.append(0)  # 空のマス
+        
         # ライン上の全てのマスにコマがあり、かつ全て同じ色か
-        if all(pieces) and all(p.color == pieces[0].color for p in pieces):
+        if all(color > 0 for color in colors) and all(color == colors[0] for color in colors):
+            winner_color = 'O' if colors[0] == 1 else 'B'
             return {
-                'winner': pieces[0].color,
+                'winner': winner_color,
                 'line': line_coords
             }
     return None

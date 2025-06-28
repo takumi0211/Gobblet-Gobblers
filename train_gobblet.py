@@ -42,27 +42,27 @@ class HyperParams:
     """学習のハイパーパラメータをまとめて管理するクラス - 最適化版"""
     
     # --- 学習全体の設定 ---
-    NUM_EPISODES: int = 20000        # 学習エピソード数
-    LOG_INTERVAL: int = 1000         # ログ出力間隔
+    NUM_EPISODES: int = 500000        # 学習エピソード数
+    LOG_INTERVAL: int = 5000         # ログ出力間隔
     
-    # --- DQNエージェントの設定（最適化） ---
+    # --- DQNエージェントの設定（50万エピソード最適化） ---
     GAMMA: float = 0.99                # 割引率
     EPSILON_START: float = 0.9         # 初期ε値（探索率）
-    EPSILON_END: float = 0.05          # 最終ε値
-    EPSILON_DECAY: int = 10000         # ε減衰ステップ数
-    LEARNING_RATE = 2e-3        # 学習率（高速化のため少し上げる）
-    BATCH_SIZE = 128            # バッチサイズ（大きくして効率化）
-    TAU = 0.005                 # ターゲットネットワーク更新率（小さくして安定化）
-    MEMORY_SIZE = 20000         # リプレイバッファサイズ（大きくして安定化）
+    EPSILON_END: float = 0.01          # 最終ε値（長期学習用により低く）
+    EPSILON_DECAY: int = 200000        # ε減衰ステップ数（50万エピソードに合わせて緩やかに）
+    LEARNING_RATE = 1e-3        # 学習率（長期学習用に安定化）
+    BATCH_SIZE = 256            # バッチサイズ（大規模学習用に増加）
+    TAU = 0.002                 # ターゲットネットワーク更新率（より緩やかに）
+    MEMORY_SIZE = 50000         # リプレイバッファサイズ（大規模学習用に増加）
     
-    # --- ニューラルネットワークの設定（最適化） ---
-    HIDDEN_SIZE = 256           # 隠れ層のサイズ（少し大きくして表現力向上）
+    # --- ニューラルネットワークの設定（50万エピソード最適化） ---
+    HIDDEN_SIZE = 512           # 隠れ層のサイズ（大規模学習用に拡大）
     STATE_DIM = 96              # 状態ベクトルの次元数（最適化で削減）
-    NUM_LAYERS = 3              # ネットワーク層数
+    NUM_LAYERS = 4              # ネットワーク層数（表現力向上）
     
     # --- パフォーマンス最適化の設定 ---
-    GRAD_CLIP_VALUE = 1.0       # 勾配クリッピング値（小さくして安定化）
-    UPDATE_FREQUENCY = 4        # ネットワーク更新頻度（効率化）
+    GRAD_CLIP_VALUE = 0.5       # 勾配クリッピング値（大規模学習用に調整）
+    UPDATE_FREQUENCY = 2        # ネットワーク更新頻度（大規模学習用に高頻度）
     PRIORITY_REPLAY = False     # 優先度付き経験再生
     DOUBLE_DQN = True          # Double DQN使用フラグ
     
@@ -865,14 +865,17 @@ def preset_quick_training():
 def preset_strong_ai():
     """強いAI学習用のプリセット（時間をかけてしっかり学習）"""
     update_hyperparameters(
-        NUM_EPISODES=100000,
-        LOG_INTERVAL=1000,
-        EPSILON_DECAY=30000,
-        LEARNING_RATE=1e-4,
+        NUM_EPISODES=500000,
+        LOG_INTERVAL=5000,
+        EPSILON_DECAY=200000,
+        EPSILON_END=0.01,
+        LEARNING_RATE=1e-3,
         BATCH_SIZE=256,
-        UPDATE_FREQUENCY=1
+        MEMORY_SIZE=50000,
+        HIDDEN_SIZE=512,
+        UPDATE_FREQUENCY=2
     )
-    print("強いAI学習プリセットを適用しました")
+    print("強いAI学習プリセット（50万エピソード）を適用しました")
 
 def preset_balanced():
     """バランス型学習用のプリセット（デフォルト設定）"""

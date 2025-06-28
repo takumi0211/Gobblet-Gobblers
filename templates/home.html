@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ゴブレットゴブラーズ | モード選択</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        .home-title {
+            font-family: 'Orbitron', monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="home-container">
+        <h1 class="home-title">GOBBLET GOBBLERS</h1>
+        
+        <div class="mode-selection">
+            <!-- 友達と対戦カード -->
+            <div class="mode-card">
+                <div class="mode-icon human">👥</div>
+                <h2 class="mode-title">マルチプレイヤー</h2>
+                <p class="mode-description">友達や家族と一緒に<br>リアルタイムで対戦</p>
+                <button id="home-human-btn" class="mode-btn">プレイ開始</button>
+            </div>
+
+            <!-- AI対戦カード -->
+            <div class="mode-card">
+                <div class="mode-icon ai">🤖</div>
+                <h2 class="mode-title">AI チャレンジ</h2>
+                <p class="mode-description">最新AIと戦略的な<br>頭脳戦を楽しもう</p>
+                <div class="ai-options">
+                    <select id="home-color-select" class="player-color-select">
+                        <option value="O">🔸 先手でプレイ (O)</option>
+                        <option value="B">🔹 後手でプレイ (B)</option>
+                    </select>
+                    <button id="home-ai-btn" class="mode-btn">AI戦開始</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script>
+    document.getElementById('home-human-btn').addEventListener('click', () => {
+        window.location.href = '/game?mode=human';
+    });
+
+    document.getElementById('home-ai-btn').addEventListener('click', () => {
+        const color = document.getElementById('home-color-select').value;
+        window.location.href = `/game?mode=ai&human_color=${color}`;
+    });
+
+    // カードのホバー効果を強化
+    document.querySelectorAll('.mode-card').forEach(card => {
+        card.addEventListener('mouseenter', () => {
+            card.style.transform = 'translateY(-10px) scale(1.02)';
+        });
+        
+        card.addEventListener('mouseleave', () => {
+            card.style.transform = 'translateY(0) scale(1)';
+        });
+    });
+</script>
+</body>
+</html> 

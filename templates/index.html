@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ゴブレットゴブラーズ | ゲーム対戦</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="game-container-wrapper">
+        <!-- ゲームヘッダー -->
+        <header class="game-header">
+            <div class="header-content">
+                <h1 class="game-title">GOBBLET GOBBLERS</h1>
+                <div class="game-status">
+                    <div class="current-player-display">
+                        <span class="status-label">現在のターン</span>
+                        <div id="current-player" class="player-indicator-game"></div>
+                    </div>
+                    <button id="home-btn" class="header-btn">🏠 ホーム</button>
+                </div>
+            </div>
+        </header>
+
+        <!-- メインゲームエリア -->
+        <div class="game-arena">
+            <!-- プレイヤーOエリア -->
+            <div class="player-area player-o-area">
+                <div class="player-card">
+                    <div class="player-header">
+                        <div class="player-icon">🔸</div>
+                        <div class="player-info">
+                            <h3 class="player-name">PLAYER O</h3>
+                            <span class="player-subtitle">オレンジ</span>
+                        </div>
+                    </div>
+                    <div class="pieces-container" id="player-o-pieces">
+                        <!-- コマが動的に追加される -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- ゲームボードエリア -->
+            <div class="board-area">
+                <div class="board-container">
+                    <div class="board-grid" id="board">
+                        <!-- 3x3のマスが動的に生成される -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- プレイヤーBエリア -->
+            <div class="player-area player-b-area">
+                <div class="player-card">
+                    <div class="player-header">
+                        <div class="player-icon">🔹</div>
+                        <div class="player-info">
+                            <h3 class="player-name">PLAYER B</h3>
+                            <span class="player-subtitle">ブルー</span>
+                        </div>
+                    </div>
+                    <div class="pieces-container" id="player-b-pieces">
+                        <!-- コマが動的に追加される -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- メッセージ表示エリア -->
+        <div id="message-area" class="message-display"></div>
+
+        <!-- 勝利モーダル -->
+        <div id="victory-modal" class="victory-modal">
+            <div class="victory-content">
+                <div class="victory-icon">🏆</div>
+                <h2 id="victory-message" class="victory-title"></h2>
+                <div class="victory-actions">
+                    <button id="play-again-btn" class="action-btn primary">🔄 もう一度</button>
+                    <button id="home-btn-modal" class="action-btn secondary">🏠 ホーム</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/game.js') }}"></script>
+    <script>
+        // ホームボタンの機能
+        document.getElementById('home-btn').addEventListener('click', () => {
+            window.location.href = '/';
+        });
+        
+        document.getElementById('home-btn-modal').addEventListener('click', () => {
+            window.location.href = '/';
+        });
+    </script>
+</body>
+</html> 

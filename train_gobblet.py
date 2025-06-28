@@ -20,8 +20,8 @@ class HyperParams:
     """学習のハイパーパラメータをまとめて管理するクラス"""
     
     # --- 学習全体の設定 ---
-    NUM_EPISODES: int = 30000        # 学習エピソード数
-    LOG_INTERVAL: int = 300          # ログ出力間隔
+    NUM_EPISODES: int = 100000        # 学習エピソード数
+    LOG_INTERVAL: int = 10000         # ログ出力間隔
     
     # --- DQNエージェントの設定 ---
     GAMMA: float = 0.99                # 割引率
@@ -390,10 +390,10 @@ class DQN(nn.Module):
         return self.value_head(features)
 
 class DQNAgent:
-    """最適化されたDQNエージェント"""
+    """CPU専用DQNエージェント"""
     
-    def __init__(self, state_dim, action_mapper, player_symbol, device=None):
-        self.device = device if device is not None else torch.device("cpu")
+    def __init__(self, state_dim, action_mapper, player_symbol):
+        self.device = torch.device("cpu")
         self.state_dim = state_dim
         self.action_mapper = action_mapper
         self.action_dim = len(action_mapper)
@@ -408,26 +408,21 @@ class DQNAgent:
         self.batch_size = HP.BATCH_SIZE
         self.tau = HP.TAU
 
-        self.policy_net = DQN(state_dim, self.action_dim).to(self.device)
-        self.target_net = DQN(state_dim, self.action_dim).to(self.device)
+        self.policy_net = DQN(state_dim, self.action_dim)
+        self.target_net = DQN(state_dim, self.action_dim)
         self.target_net.load_state_dict(self.policy_net.state_dict())
         self.optimizer = optim.AdamW(self.policy_net.parameters(), lr=self.learning_rate, amsgrad=True)
         self.memory = ReplayBuffer(HP.MEMORY_SIZE)
         self.steps_done = 0
         
         # 計算効率化のためのキャッシュ
-        self._mask_cache = torch.full((self.action_dim,), -float('inf'), device=self.device)
+        self._mask_cache = torch.full((self.action_dim,), -float('inf'))
         
-        # 🚀 最適化: テンソル事前確保
-        self._state_tensor_cache = torch.zeros(1, state_dim, device=self.device, dtype=torch.float32)
-        self._valid_indices_cache = torch.zeros(self.action_dim, device=self.device, dtype=torch.long)
-        
-        # 🚀 最適化: 混合精度学習（GPU使用時）
-        self.use_amp = device.type == 'cuda' and torch.cuda.is_available()
-        if self.use_amp:
-            self.scaler = torch.cuda.amp.GradScaler()
+        # テンソル事前確保
+        self._state_tensor_cache = torch.zeros(1, state_dim, dtype=torch.float32)
+        self._valid_indices_cache = torch.zeros(self.action_dim, dtype=torch.long)
 
-        # 🚀 最適化: 更新頻度制御
+        # 更新頻度制御
         self.update_counter = 0
 
     def select_action(self, state: np.ndarray, valid_moves: List) -> int:
@@ -441,15 +436,12 @@ class DQNAgent:
 
         if sample > eps_threshold:
             with torch.no_grad():
-                # 🚀 最適化: テンソル再利用
+                # テンソル再利用
                 self._state_tensor_cache[0] = torch.from_numpy(state)
                 
-                # 🚀 最適化: 混合精度推論
-                if self.use_amp:
-                    with torch.cuda.amp.autocast():
-                        q_values = self.policy_net(self._state_tensor_cache)[0]
-                else:
-                    q_values = self.policy_net(self._state_tensor_cache)[0]
+                # CPU推論
+                q_values = self.policy_net(self._state_tensor_cache)[0]
+                
                 # マスクを再利用
                 mask = self._mask_cache.clone()
                 mask[valid_action_indices] = 0
@@ -460,7 +452,7 @@ class DQNAgent:
         return action_idx
 
     def optimize_model(self):
-        """モデルの最適化 - バッチ処理の改善"""
+        """モデルの最適化 - CPU専用バッチ処理"""
         if len(self.memory) < self.batch_size:
             return
         
@@ -469,21 +461,21 @@ class DQNAgent:
             batch = Experience(*zip(*experiences))
 
             # バッチテンソルの効率的な作成
-            state_batch = torch.tensor(np.vstack(batch.state), dtype=torch.float32, device=self.device)
-            action_batch = torch.tensor(batch.action_idx, dtype=torch.int64, device=self.device).unsqueeze(1)
-            reward_batch = torch.tensor(batch.reward, dtype=torch.float32, device=self.device).unsqueeze(1)
+            state_batch = torch.tensor(np.vstack(batch.state), dtype=torch.float32)
+            action_batch = torch.tensor(batch.action_idx, dtype=torch.int64).unsqueeze(1)
+            reward_batch = torch.tensor(batch.reward, dtype=torch.float32).unsqueeze(1)
             
-            non_final_mask = torch.tensor([not done for done in batch.done], dtype=torch.bool, device=self.device)
-            next_state_values = torch.zeros(self.batch_size, device=self.device)
+            non_final_mask = torch.tensor([not done for done in batch.done], dtype=torch.bool)
+            next_state_values = torch.zeros(self.batch_size)
 
             # 終了していない状態のみを処理
             if non_final_mask.any():
                 non_final_next_states = torch.tensor(
                     np.vstack([batch.next_state[i] for i in range(len(batch.done)) if not batch.done[i]]), 
-                    dtype=torch.float32, device=self.device
+                    dtype=torch.float32
                 )
                 with torch.no_grad():
-                    # 🚀 最適化: Double DQN
+                    # Double DQN
                     if HP.DOUBLE_DQN:
                         # Policy networkで行動選択、Target networkで価値評価
                         next_actions = self.policy_net(non_final_next_states).argmax(1)
@@ -493,26 +485,14 @@ class DQNAgent:
             
             expected_state_action_values = (next_state_values.unsqueeze(1) * self.gamma) + reward_batch
             
-            # 🚀 最適化: 混合精度学習
-            if self.use_amp:
-                with torch.cuda.amp.autocast():
-                    state_action_values = self.policy_net(state_batch).gather(1, action_batch)
-                    loss = F.smooth_l1_loss(state_action_values, expected_state_action_values)
-                
-                self.optimizer.zero_grad()
-                self.scaler.scale(loss).backward()
-                self.scaler.unscale_(self.optimizer)
-                torch.nn.utils.clip_grad_value_(self.policy_net.parameters(), HP.GRAD_CLIP_VALUE)
-                self.scaler.step(self.optimizer)
-                self.scaler.update()
-            else:
-                state_action_values = self.policy_net(state_batch).gather(1, action_batch)
-                loss = F.smooth_l1_loss(state_action_values, expected_state_action_values)
-                
-                self.optimizer.zero_grad()
-                loss.backward()
-                torch.nn.utils.clip_grad_value_(self.policy_net.parameters(), HP.GRAD_CLIP_VALUE)
-                self.optimizer.step()
+            # CPU学習
+            state_action_values = self.policy_net(state_batch).gather(1, action_batch)
+            loss = F.smooth_l1_loss(state_action_values, expected_state_action_values)
+            
+            self.optimizer.zero_grad()
+            loss.backward()
+            torch.nn.utils.clip_grad_value_(self.policy_net.parameters(), HP.GRAD_CLIP_VALUE)
+            self.optimizer.step()
         except Exception as e:
             print(f"Warning: 学習中にエラーが発生しました: {e}")
             return
@@ -582,25 +562,22 @@ def plot_win_rate(win_history, interval):
     print("\n学習の進捗グラフを 'win_rate_history.png' として保存しました。")
 
 def train():
-    """最適化された学習ループ"""
+    """CPU専用学習ループ"""
     num_episodes = HP.NUM_EPISODES
     log_interval = HP.LOG_INTERVAL
     
     # ハイパーパラメータを表示
     print_hyperparameters()
     
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"使用デバイス: {device}")
+    print(f"使用デバイス: CPU")
     print(f"PyTorch バージョン: {torch.__version__}")
-    if torch.cuda.is_available():
-        print(f"CUDA バージョン: {torch.version.cuda}")
     
     env = GobbletGobblersGame()
     action_mapper = ActionMapper()
     
     agents = {
-        'O': DQNAgent(state_dim=HP.STATE_DIM, action_mapper=action_mapper, player_symbol='O', device=device),
-        'B': DQNAgent(state_dim=HP.STATE_DIM, action_mapper=action_mapper, player_symbol='B', device=device)
+        'O': DQNAgent(state_dim=HP.STATE_DIM, action_mapper=action_mapper, player_symbol='O'),
+        'B': DQNAgent(state_dim=HP.STATE_DIM, action_mapper=action_mapper, player_symbol='B')
     }
     
     win_history = []

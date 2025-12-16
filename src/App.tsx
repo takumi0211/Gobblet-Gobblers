@@ -125,7 +125,16 @@ function App() {
         blueHand={blueHand}
         selectedPiece={selectedPiece}
         onPieceClick={handlePieceClick}
-        onCellClick={handleCellClick}
+        onCellClick={(r, c) => {
+          // If clicking a cell with a piece of current player, select it (if no piece selected or switching selection)
+          const cell = board[r][c];
+          const topPiece = getTopPiece(cell);
+          if (!selectedPiece && topPiece && topPiece.player === turn) {
+            handlePieceClick(topPiece, { row: r, col: c });
+          } else {
+            handleCellClick(r, c);
+          }
+        }}
         isValidMove={(r, c) => {
           if (!selectedPiece) return false;
           const fromRow = selectedPiece.from !== 'hand' ? selectedPiece.from.row : undefined;

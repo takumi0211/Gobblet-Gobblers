@@ -14,14 +14,39 @@ export function Board3D({ board, onCellClick, selectedPiece, isValidMove }: Boar
 
     return (
         <group>
-            {/* Base Platform */}
-            <mesh receiveShadow position={[0, -0.5, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-                <boxGeometry args={[12, 12, 1]} />
-                <meshStandardMaterial color="#1e293b" /> {/* slate-800 */}
-            </mesh>
+            {/* Bar Grid Structure */}
+            <group position={[0, -0.25, 0]}>
+                {/* Horizontal Bars (Cyan/Blue) - along Z axis? No, cutting across Z axis, so acting as rows dividers */}
+                {/* Positions: Between row 0&1 (z=-1.75) and 1&2 (z=1.75) */}
 
-            {/* Grid Lines */}
-            <gridHelper args={[10.5, 3, "#94a3b8", "#334155"]} position={[0, 0.01, 0]} />
+                {/* Bar 1 (Top) */}
+                <mesh receiveShadow castShadow position={[0, 0, -1.75]}>
+                    <boxGeometry args={[11, 0.5, 0.5]} />
+                    <meshStandardMaterial color="#0ea5e9" roughness={0.4} /> {/* sky-500 */}
+                </mesh>
+
+                {/* Bar 2 (Bottom) */}
+                <mesh receiveShadow castShadow position={[0, 0, 1.75]}>
+                    <boxGeometry args={[11, 0.5, 0.5]} />
+                    <meshStandardMaterial color="#0ea5e9" roughness={0.4} /> {/* sky-500 */}
+                </mesh>
+
+                {/* Vertical Bars (Orange) - along X axis? No, cutting across X axis, so acting as col dividers */}
+                {/* Positions: Between col 0&1 (x=-1.75) and 1&2 (x=1.75) */}
+
+                {/* Bar 3 (Left) - Shifted Y slightly to interlock or stack? Let's stack them on top for now or cross them */}
+                {/* Reference image: They seem to be on same level or interlocking. Simple cross is fine. */}
+                <mesh receiveShadow castShadow position={[-1.75, 0, 0]}>
+                    <boxGeometry args={[0.5, 0.5, 11]} />
+                    <meshStandardMaterial color="#f97316" roughness={0.4} /> {/* orange-500 */}
+                </mesh>
+
+                {/* Bar 4 (Right) */}
+                <mesh receiveShadow castShadow position={[1.75, 0, 0]}>
+                    <boxGeometry args={[0.5, 0.5, 11]} />
+                    <meshStandardMaterial color="#f97316" roughness={0.4} /> {/* orange-500 */}
+                </mesh>
+            </group>
 
             {/* Cells */}
             {board.map((row, rIdx) =>
@@ -30,30 +55,23 @@ export function Board3D({ board, onCellClick, selectedPiece, isValidMove }: Boar
                     const z = (rIdx - 1) * cellSpacing;
                     const isValid = isValidMove(rIdx, cIdx);
 
-                    // const topPiece = getTopPiece(cellState); // Removed unused variable
-
                     return (
                         <group key={`${rIdx}-${cIdx}`} position={[x, 0, z]}>
-                            {/* Cell Hit Area / Visual */}
+                            {/* Cell Hit Area / Visual - Only visible if valid or debug */}
                             <mesh
                                 rotation={[-Math.PI / 2, 0, 0]}
-                                position={[0, 0.02, 0]}
+                                position={[0, -0.2, 0]} // Slightly below pieces
                                 onClick={() => {
                                     onCellClick(rIdx, cIdx);
                                 }}
                             >
                                 <planeGeometry args={[3, 3]} />
                                 <meshStandardMaterial
-                                    color={isValid ? "#34d399" : "#1e293b"} // Green if valid, else slate
+                                    color={isValid ? "#86efac" : "white"}
                                     transparent
-                                    opacity={isValid ? 0.3 : 0}
+                                    opacity={isValid ? 0.3 : 0.0} // Invisible unless valid
+                                    side={2} // Double side
                                 />
-                            </mesh>
-
-                            {/* Cell Border/Marker */}
-                            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]}>
-                                <ringGeometry args={[1.4, 1.5, 32]} />
-                                <meshStandardMaterial color="#334155" />
                             </mesh>
 
                             {/* Render Pieces in this cell */}
@@ -72,7 +90,7 @@ export function Board3D({ board, onCellClick, selectedPiece, isValidMove }: Boar
                                     <Piece3D
                                         key={piece.id}
                                         piece={piece}
-                                        position={[0, 0, 0]} // Relative to cell group
+                                        position={[0, -0.5, 0]} // On floor (bottom of grid)
                                         isSelected={isSelected}
                                         isTop={isTop}
                                         onClick={(e: ThreeEvent<MouseEvent>) => {

@@ -19,8 +19,8 @@ export function Hand3D({ player, pieces, onPieceClick, selectedPiece, isActive }
     // Let's do Top (Blue) and Bottom (Orange).
 
     const position: [number, number, number] = player === 'orange'
-        ? [0, 0, 6] // Bottom
-        : [0, 0, -6]; // Top
+        ? [0, 0, 9] // Bottom (Further away)
+        : [0, 0, -9]; // Top (Further away)
 
     const rotation: [number, number, number] = player === 'blue'
         ? [0, Math.PI, 0] // Face the board
@@ -32,11 +32,6 @@ export function Hand3D({ player, pieces, onPieceClick, selectedPiece, isActive }
 
     return (
         <group position={position} rotation={rotation}>
-            {/* Base/Tray for hand */}
-            <mesh receiveShadow position={[0, -0.4, 0]}>
-                <boxGeometry args={[10, 0.5, 2]} />
-                <meshStandardMaterial color={isActive ? "#334155" : "#1e293b"} />
-            </mesh>
 
             {/* Label? Maybe UI overlay is better for names, but 3D text is cool */}
             {/* 
@@ -68,7 +63,7 @@ export function Hand3D({ player, pieces, onPieceClick, selectedPiece, isActive }
                     <Piece3D
                         key={piece.id}
                         piece={piece}
-                        position={[x, 0, 0]}
+                        position={[x, -0.5, 0]}
                         isSelected={isSelected}
                         onClick={(e: ThreeEvent<MouseEvent>) => {
                             e.stopPropagation();

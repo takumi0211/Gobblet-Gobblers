@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Scene } from './components/3d/Scene';
 import type { BoardState, Piece, Player, SelectedPiece } from './types';
 import {
@@ -18,18 +18,20 @@ function App() {
   const [blueHand, setBlueHand] = useState<Piece[]>(createInitialHand('blue'));
   const [selectedPiece, setSelectedPiece] = useState<SelectedPiece | null>(null);
 
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSelectedPiece(null);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+
   const handlePieceClick = (piece: Piece, from: 'hand' | { row: number; col: number }) => {
     if (winner) return;
     if (piece.player !== turn) return;
 
-    // If you already "touched" a piece on the board, you must move it (can't cancel/switch).
-    if (selectedPiece && selectedPiece.from !== 'hand') {
-      if (selectedPiece.piece.id === piece.id) return;
-      return;
-    }
-
-    // If clicking the same piece from hand, deselect
-    if (selectedPiece?.piece.id === piece.id && selectedPiece.from === 'hand' && from === 'hand') {
+    // Toggle off if clicking the currently selected piece
+    if (selectedPiece?.piece.id === piece.id) {
       setSelectedPiece(null);
       return;
     }
@@ -39,12 +41,6 @@ function App() {
       const cell = board[from.row][from.col];
       const topPiece = getTopPiece(cell);
       if (topPiece?.id !== piece.id) return; // Can only move top piece
-
-      // If the touched piece has no legal destination, don't allow selecting it (prevents a dead lock).
-      const hasAnyValidMove = board.some((r, rIdx) =>
-        r.some((_c, cIdx) => isValidMove(rIdx, cIdx, piece, board, from.row, from.col))
-      );
-      if (!hasAnyValidMove) return;
     }
 
     setSelectedPiece({ piece, from });
@@ -148,8 +144,7 @@ function App() {
 
         {/* Header */}
         <div className="text-center">
-          <h1 className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-blue-400 drop-shadow-lg"
-            style={{ filter: 'drop-shadow(0 0 10px rgba(0,0,0,0.5))' }}>
+          <h1 className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-blue-400 drop-shadow-lg">
             Gobblet Gobblers
           </h1>
           <div className="mt-4 text-3xl font-bold font-mono tracking-wider drop-shadow-md">
@@ -169,7 +164,7 @@ function App() {
         <div className="flex justify-center pb-8 pointer-events-auto">
           <button
             onClick={resetGame}
-            className="px-8 py-3 bg-white/10 backdrop-blur-md hover:bg-white/20 border border-white/20 rounded-full text-white font-bold text-lg transition-all transform hover:scale-105 active:scale-95 shadow-lg"
+            className="px-8 py-3 bg-slate-800 hover:bg-slate-700 text-white border border-slate-600 rounded-full font-bold text-lg transition-all transform hover:scale-105 active:scale-95 shadow-lg"
           >
             Reset Game
           </button>
@@ -177,12 +172,11 @@ function App() {
       </div>
 
       {/* Instructions / Controls Hint */}
-      <div className="absolute bottom-4 right-4 text-white/30 text-xs pointer-events-none">
-        Left Click to Select/Move • Right Click to Rotate • Wheel to Zoom
+      <div className="absolute bottom-4 right-4 text-slate-400 text-xs pointer-events-none">
+        Left Click to Select/Move • Right Drag to Rotate • Wheel to Zoom • Esc to Cancel
       </div>
     </div>
   );
 }
 
 export default App;
-

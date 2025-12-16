@@ -1,9 +1,10 @@
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls, PerspectiveCamera, Stars } from '@react-three/drei';
+import { OrbitControls, PerspectiveCamera } from '@react-three/drei';
 import type { BoardState, Piece, Player, SelectedPiece } from '../../types';
 import { Board3D } from './Board3D';
 import { Hand3D } from './Hand3D';
 import { Suspense } from 'react';
+import * as THREE from 'three';
 
 interface SceneProps {
     board: BoardState;
@@ -30,7 +31,12 @@ export function Scene({
 }: SceneProps) {
 
     return (
-        <Canvas shadows dpr={[1, 2]} className="w-full h-full absolute inset-0">
+        <Canvas
+            shadows
+            dpr={[1, 2]}
+            className="w-full h-full absolute inset-0"
+            onContextMenu={(e) => e.preventDefault()}
+        >
             <Suspense fallback={null}>
                 <PerspectiveCamera makeDefault position={[0, 8, 12]} fov={50} />
                 <OrbitControls
@@ -38,26 +44,36 @@ export function Scene({
                     maxPolarAngle={Math.PI / 2.1}
                     maxDistance={20}
                     minDistance={5}
+                    enablePan={false}
+                    mouseButtons={{
+                        LEFT: THREE.MOUSE.PAN, // Pan is disabled; frees left-drag for selecting/moving pieces
+                        MIDDLE: THREE.MOUSE.DOLLY,
+                        RIGHT: THREE.MOUSE.ROTATE,
+                    }}
                 />
 
-                {/* Lighting */}
-                <ambientLight intensity={0.5} />
+                {/* Lighting - High Key Studio */}
+                <ambientLight intensity={1.2} />
                 <spotLight
-                    position={[10, 10, 10]}
-                    angle={0.15}
-                    penumbra={1}
-                    intensity={1}
+                    position={[5, 15, 5]}
+                    angle={0.4}
+                    penumbra={0.5}
+                    intensity={1.0}
                     castShadow
-                    shadow-mapSize={[2048, 2048]}
+                    shadow-bias={-0.0001}
                 />
-                <pointLight position={[-10, -10, -10]} intensity={0.5} />
+                <pointLight position={[-10, 5, -10]} intensity={0.5} />
 
-                {/* Environment / Background */}
-                <Stars radius={100} depth={50} count={5000} factor={4} saturation={0} fade speed={1} />
-                <color attach="background" args={['#0f172a']} /> {/* slate-900 */}
+                {/* Studio Background */}
+                <color attach="background" args={['#ffffff']} />
 
-                {/* Floor Reflections */}
-                {/* <ContactShadows resolution={1024} scale={20} blur={2} opacity={0.5} far={10} color="#000000" /> */}
+                {/* Floor Shadows only */}
+                <group position={[0, -1.51, 0]}> {/* At bottom of bars (-1.5) with tiny offset to prevent z-fighting if any */}
+                    <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
+                        <planeGeometry args={[100, 100]} />
+                        <shadowMaterial opacity={0.1} />
+                    </mesh>
+                </group>
 
                 <group position={[0, -1, 0]}>
                     <Board3D

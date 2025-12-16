@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { Board } from './components/Board';
-import { PlayerHand } from './components/PlayerHand';
+import { Scene } from './components/3d/Scene';
 import type { BoardState, Piece, Player, SelectedPiece } from './types';
 import {
   checkWin,
@@ -116,72 +115,65 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white flex flex-col items-center justify-center p-4">
-      <h1 className="text-4xl font-bold mb-8 text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-blue-400">
-        Gobblet Gobblers
-      </h1>
+    <div className="w-full h-screen bg-gray-900 overflow-hidden relative selection:bg-none">
+      {/* 3D Scene */}
+      <Scene
+        board={board}
+        turn={turn}
+        winner={winner}
+        orangeHand={orangeHand}
+        blueHand={blueHand}
+        selectedPiece={selectedPiece}
+        onPieceClick={handlePieceClick}
+        onCellClick={handleCellClick}
+        isValidMove={(r, c) => {
+          if (!selectedPiece) return false;
+          const fromRow = selectedPiece.from !== 'hand' ? selectedPiece.from.row : undefined;
+          const fromCol = selectedPiece.from !== 'hand' ? selectedPiece.from.col : undefined;
+          return isValidMove(r, c, selectedPiece.piece, board, fromRow, fromCol);
+        }}
+      />
 
-      <div className="flex flex-col md:flex-row gap-8 items-center">
-        <PlayerHand
-          player="orange"
-          pieces={orangeHand}
-          onPieceClick={(p) => handlePieceClick(p, 'hand')}
-          selectedPiece={selectedPiece?.piece || null}
-          isActive={turn === 'orange' && !winner}
-        />
+      {/* UI Overlay */}
+      <div className="absolute top-0 left-0 w-full h-full pointer-events-none flex flex-col justify-between p-8">
 
-        <div className="flex flex-col items-center gap-4">
-          <div className="text-2xl font-semibold mb-2">
+        {/* Header */}
+        <div className="text-center">
+          <h1 className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-blue-400 drop-shadow-lg"
+            style={{ filter: 'drop-shadow(0 0 10px rgba(0,0,0,0.5))' }}>
+            Gobblet Gobblers
+          </h1>
+          <div className="mt-4 text-3xl font-bold font-mono tracking-wider drop-shadow-md">
             {winner ? (
-              <span className={winner === 'orange' ? 'text-orange-500' : 'text-blue-500'}>
+              <span className={`${winner === 'orange' ? 'text-orange-500' : 'text-blue-500'} animate-pulse`}>
                 {winner.toUpperCase()} WINS!
               </span>
             ) : (
               <span className={turn === 'orange' ? 'text-orange-500' : 'text-blue-500'}>
-                {turn.toUpperCase()}'s Turn
+                {turn === 'orange' ? 'ORANGE' : 'BLUE'}'s TURN
               </span>
             )}
           </div>
+        </div>
 
-          <Board
-            board={board}
-            onCellClick={(r, c) => {
-              // If clicking a cell with a piece of current player, select it (if no piece selected or switching selection)
-              const cell = board[r][c];
-              const topPiece = getTopPiece(cell);
-              if (!selectedPiece && topPiece && topPiece.player === turn) {
-                handlePieceClick(topPiece, { row: r, col: c });
-              } else {
-                handleCellClick(r, c);
-              }
-            }}
-            selectedPiece={selectedPiece}
-            isValidMove={(r, c) => {
-              if (!selectedPiece) return false;
-              const fromRow = selectedPiece.from !== 'hand' ? selectedPiece.from.row : undefined;
-              const fromCol = selectedPiece.from !== 'hand' ? selectedPiece.from.col : undefined;
-              return isValidMove(r, c, selectedPiece.piece, board, fromRow, fromCol);
-            }}
-          />
-
+        {/* Footer / Controls */}
+        <div className="flex justify-center pb-8 pointer-events-auto">
           <button
             onClick={resetGame}
-            className="mt-4 px-6 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg font-semibold transition-colors"
+            className="px-8 py-3 bg-white/10 backdrop-blur-md hover:bg-white/20 border border-white/20 rounded-full text-white font-bold text-lg transition-all transform hover:scale-105 active:scale-95 shadow-lg"
           >
             Reset Game
           </button>
         </div>
+      </div>
 
-        <PlayerHand
-          player="blue"
-          pieces={blueHand}
-          onPieceClick={(p) => handlePieceClick(p, 'hand')}
-          selectedPiece={selectedPiece?.piece || null}
-          isActive={turn === 'blue' && !winner}
-        />
+      {/* Instructions / Controls Hint */}
+      <div className="absolute bottom-4 right-4 text-white/30 text-xs pointer-events-none">
+        Left Click to Select/Move • Right Click to Rotate • Wheel to Zoom
       </div>
     </div>
   );
 }
 
 export default App;
+

@@ -19,8 +19,8 @@ export function Hand3D({ player, pieces, onPieceClick, selectedPiece, isActive }
     // Let's do Top (Blue) and Bottom (Orange).
 
     const position: [number, number, number] = player === 'orange'
-        ? [0, 0, 9] // Bottom (Further away)
-        : [0, 0, -9]; // Top (Further away)
+        ? [0, 0, 6.5] // Bottom (Further away)
+        : [0, 0, -6.5]; // Top (Further away)
 
     const rotation: [number, number, number] = player === 'blue'
         ? [0, Math.PI, 0] // Face the board

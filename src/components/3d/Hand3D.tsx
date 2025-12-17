@@ -9,51 +9,38 @@ interface Hand3DProps {
     onPieceClick: (piece: Piece) => void;
     selectedPiece: Piece | null;
     isActive: boolean;
+    isMobile: boolean;
+    onDrop: (row: number, col: number) => void;
 }
 
-export function Hand3D({ player, pieces, onPieceClick, selectedPiece, isActive }: Hand3DProps) {
+export function Hand3D({ player, pieces, onPieceClick, selectedPiece, isActive, isMobile, onDrop }: Hand3DProps) {
     // Position hands on opposite sides of the board
     // Board is roughly -3.5 to +3.5. Let's place hands at z = +/- 6
     // Or maybe x = +/- 6.
     // Let's do Side by Side for landscape? Or Top/Bottom for standard board game view?
     // Let's do Top (Blue) and Bottom (Orange).
 
-    const position: [number, number, number] = player === 'orange'
-        ? [0, 0, 6.5] // Bottom (Further away)
-        : [0, 0, -6.5]; // Top (Further away)
+    // Mobile: Top/Bottom
+    // Desktop: Top/Bottom but closer (z=6.5) -> User wants even closer.
+    // Board edge is approx +/- 5.0.
+    // Let's try 6.0 for both.
+
+    const position: [number, number, number] = isMobile
+        ? (player === 'orange' ? [0, 0, 6.0] : [0, 0, -6.0])
+        : (player === 'orange' ? [0, 0, 6.0] : [0, 0, -6.0]);
 
     const rotation: [number, number, number] = player === 'blue'
         ? [0, Math.PI, 0] // Face the board
         : [0, 0, 0];
 
-    // Group pieces by size to organize them nicely? 
-    // Or just display them in a line.
-    // Let's organize by size: Small, Medium, Large.
+    // For mobile top-down, maybe we want to rotate them to face the camera?
+    // Actually current rotation is fine if we are looking from top.
 
     return (
         <group position={position} rotation={rotation}>
 
-            {/* Label? Maybe UI overlay is better for names, but 3D text is cool */}
-            {/* 
-       <Text 
-        position={[0, 0.5, 1.2]} 
-        color={player === 'orange' ? "orange" : "skyblue"}
-        fontSize={0.5}
-        anchorX="center"
-        anchorY="middle"
-       >
-        {player.toUpperCase()}
-       </Text>
-       */}
-
             {pieces.map((piece, idx) => {
-                // Calculate slot position
-                // We have up to 6 pieces (2 small, 2 med, 2 large) per player usually?
-                // Actually createInitialHand gives: 2 Large, 2 Medium, 2 Small = 6 pieces.
-                // Let's distribute them: Large(L, R), Med(L, R), Small(L, R)
-                // Or just -3, -2, -1, 1, 2, 3
-
-                const spacing = 1.3;
+                const spacing = isMobile ? 1.3 : 1.5; // Increased mobile spacing further
                 const startX = -((pieces.length - 1) * spacing) / 2;
                 const x = startX + idx * spacing;
 
@@ -72,6 +59,7 @@ export function Hand3D({ player, pieces, onPieceClick, selectedPiece, isActive }
                                 onPieceClick(piece);
                             }
                         }}
+                        onDrop={onDrop}
                     />
                 )
             })}

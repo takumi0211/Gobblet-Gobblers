@@ -59,6 +59,8 @@ export function Board3D({ board, onCellClick, selectedPiece, isValidMove }: Boar
                         <group key={`${rIdx}-${cIdx}`} position={[x, 0, z]}>
                             {/* Cell Hit Area / Visual - Only visible if valid or debug */}
                             <mesh
+                                name={`cell-${rIdx}-${cIdx}`}
+                                userData={{ type: 'cell', row: rIdx, col: cIdx }}
                                 rotation={[-Math.PI / 2, 0, 0]}
                                 position={[0, -0.2, 0]} // Slightly below pieces
                                 onClick={() => {
@@ -75,36 +77,39 @@ export function Board3D({ board, onCellClick, selectedPiece, isValidMove }: Boar
                             </mesh>
 
                             {/* Render Pieces in this cell */}
-                            {cellState.map((piece, pIdx) => {
-                                // Only render visible pieces? Ideally yes just the top one or stack slightly?
-                                // In real game, bigger ones cover smaller ones. 
-                                // Implementing true "Gobbling" visually:
-                                // Render all, but smaller ones are hidden inside bigger ones automatically by geometry if sizes are correct.
-                                // But to be safe and efficient, we can just render all at same pos, z-fighting might be issue if exact same size.
-                                // Since sizes differ, geometry handles it.
+                            {
+                                cellState.map((piece, pIdx) => {
+                                    // Only render visible pieces? Ideally yes just the top one or stack slightly?
+                                    // In real game, bigger ones cover smaller ones. 
+                                    // Implementing true "Gobbling" visually:
+                                    // Render all, but smaller ones are hidden inside bigger ones automatically by geometry if sizes are correct.
+                                    // But to be safe and efficient, we can just render all at same pos, z-fighting might be issue if exact same size.
+                                    // Since sizes differ, geometry handles it.
 
-                                const isTop = pIdx === cellState.length - 1;
-                                const isSelected = selectedPiece?.piece.id === piece.id;
+                                    const isTop = pIdx === cellState.length - 1;
+                                    const isSelected = selectedPiece?.piece.id === piece.id;
 
-                                return (
-                                    <Piece3D
-                                        key={piece.id}
-                                        piece={piece}
-                                        position={[0, -0.5, 0]} // On floor (bottom of grid)
-                                        isSelected={isSelected}
-                                        isTop={isTop}
-                                        onClick={(e: ThreeEvent<MouseEvent>) => {
-                                            e.stopPropagation();
-                                            // Click handled by Board interaction generally, but we can pass it up
-                                            onCellClick(rIdx, cIdx);
-                                        }}
-                                    />
-                                )
-                            })}
+                                    return (
+                                        <Piece3D
+                                            key={piece.id}
+                                            piece={piece}
+                                            position={[0, -0.5, 0]} // On floor (bottom of grid)
+                                            isSelected={isSelected}
+                                            isTop={isTop}
+                                            onDrop={(r, c) => onCellClick(r, c)}
+                                            onClick={(e: ThreeEvent<MouseEvent>) => {
+                                                e.stopPropagation();
+                                                // Click handled by Board interaction generally, but we can pass it up
+                                                onCellClick(rIdx, cIdx);
+                                            }}
+                                        />
+                                    )
+                                })
+                            }
                         </group>
                     );
                 })
             )}
-        </group>
+        </group >
     );
 }

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useIsMobile } from './hooks/useIsMobile';
 import { Scene } from './components/3d/Scene';
 import type { BoardState, Piece, Player, SelectedPiece } from './types';
 import {
@@ -11,6 +12,7 @@ import {
 } from './utils/gameLogic';
 
 function App() {
+  const isMobile = useIsMobile();
   const [board, setBoard] = useState<BoardState>(createInitialBoard());
   const [turn, setTurn] = useState<Player>('orange');
   const [winner, setWinner] = useState<Player | 'draw' | null>(null);
@@ -137,6 +139,7 @@ function App() {
           const fromCol = selectedPiece.from !== 'hand' ? selectedPiece.from.col : undefined;
           return isValidMove(r, c, selectedPiece.piece, board, fromRow, fromCol);
         }}
+        isMobile={isMobile}
       />
 
       {/* UI Overlay */}
@@ -144,10 +147,10 @@ function App() {
 
         {/* Header */}
         <div className="text-center">
-          <h1 className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-blue-400 drop-shadow-lg">
+          <h1 className="text-3xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-blue-400 drop-shadow-lg transition-all duration-300">
             Gobblet Gobblers
           </h1>
-          <div className="mt-4 text-3xl font-bold font-mono tracking-wider drop-shadow-md">
+          <div className="mt-4 text-xl md:text-3xl font-bold font-mono tracking-wider drop-shadow-md">
             {winner ? (
               <span className={`${winner === 'orange' ? 'text-orange-500' : 'text-blue-500'} animate-pulse`}>
                 {winner.toUpperCase()} WINS!

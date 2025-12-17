@@ -16,6 +16,7 @@ interface SceneProps {
     onPieceClick: (piece: Piece, from: 'hand' | { row: number; col: number }) => void;
     onCellClick: (row: number, col: number) => void;
     isValidMove: (row: number, col: number) => boolean;
+    isMobile: boolean;
 }
 
 export function Scene({
@@ -28,6 +29,7 @@ export function Scene({
     onPieceClick,
     onCellClick,
     isValidMove,
+    isMobile,
 }: SceneProps) {
 
     return (
@@ -38,7 +40,11 @@ export function Scene({
             onContextMenu={(e) => e.preventDefault()}
         >
             <Suspense fallback={null}>
-                <PerspectiveCamera makeDefault position={[0, 8, 12]} fov={50} />
+                <PerspectiveCamera
+                    makeDefault
+                    position={isMobile ? [0, 15, 0] : [0, 8, 12]}
+                    fov={50}
+                />
                 <OrbitControls
                     minPolarAngle={0}
                     maxPolarAngle={Math.PI / 2.1}
@@ -89,6 +95,8 @@ export function Scene({
                         isActive={turn === 'orange' && !winner}
                         selectedPiece={selectedPiece?.piece || null}
                         onPieceClick={(p) => onPieceClick(p, 'hand')}
+                        isMobile={isMobile}
+                        onDrop={onCellClick}
                     />
 
                     <Hand3D
@@ -97,6 +105,8 @@ export function Scene({
                         isActive={turn === 'blue' && !winner}
                         selectedPiece={selectedPiece?.piece || null}
                         onPieceClick={(p) => onPieceClick(p, 'hand')}
+                        isMobile={isMobile}
+                        onDrop={onCellClick}
                     />
                 </group>
             </Suspense>
